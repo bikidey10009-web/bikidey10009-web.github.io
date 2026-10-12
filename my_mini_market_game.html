@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Mini Mart Farm</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#bde7ff;font-family:system-ui,Arial;color:#fff;overflow:hidden;touch-action:none}canvas{display:block;width:100vw;height:100vh}
+#hud{position:fixed;inset:0;pointer-events:none;display:flex;flex-direction:column;justify-content:space-between;padding:10px}
+.top{display:flex;justify-content:space-between;gap:8px;align-items:start}.logo,.money,.mission,.hint{background:#174b39eF;border:2px solid #ffffff80;border-radius:14px;padding:9px 12px;box-shadow:0 3px 0 #12372c66;font-weight:900}.logo{font-size:clamp(16px,4vw,23px)}.logo span{color:#ffdc69}.money{color:#ffe68a}.mission{position:absolute;right:10px;top:62px;font-size:12px;line-height:1.5}.mission b{display:block;color:#b9ffae}.bottom{display:flex;align-items:end;justify-content:space-between;gap:8px}.hint{font-size:11px;font-weight:700;max-width:46%;background:#174b39df}.stick{pointer-events:auto;width:112px;height:112px;border-radius:50%;background:#174b3977;border:3px solid #ffffffb0;position:relative;touch-action:none;flex-shrink:0}.knob{position:absolute;left:31px;top:31px;width:44px;height:44px;border-radius:50%;background:#fff;border:3px solid #d3f4de;box-shadow:0 3px 6px #0003}.actions{pointer-events:auto;display:flex;flex-direction:column;gap:7px}.btn{border:0;border-radius:13px;padding:12px 10px;min-width:105px;background:#ffca49;color:#4a3100;font-weight:1000;font-size:13px;box-shadow:0 4px 0 #b47b21;touch-action:manipulation}.btn.green{background:#5df095;color:#104a2a;box-shadow:0 4px 0 #239852}.btn:active{transform:translateY(3px);box-shadow:none}.overlay{position:fixed;inset:0;display:grid;place-items:center;background:#102d2c55;padding:20px}.card{max-width:390px;width:100%;background:#174b39;border:3px solid #ffffffaa;border-radius:24px;padding:23px;text-align:center;box-shadow:0 14px 45px #16392d55}.card h1{font-size:clamp(28px,8vw,43px);line-height:1.05;margin:0 0 10px}.card p{color:#e0ffeb;line-height:1.5}.card .btn{font-size:17px;padding:14px 24px}.hidden{display:none}.toast{position:fixed;top:17%;left:50%;transform:translateX(-50%);background:#174b39;border:2px solid white;border-radius:14px;padding:10px 15px;font-weight:900;opacity:0;transition:.2s;pointer-events:none;text-align:center;max-width:90vw}.toast.show{opacity:1}
+@media(min-width:750px){.stick{width:130px;height:130px}.knob{left:38px;top:38px}.actions{flex-direction:row}.hint{font-size:14px}}
+</style></head>
+<body><canvas id="c"></canvas>
+<div id="hud"><div class="top"><div class="logo">🌱 MINI <span>MART</span></div><div class="money">💰 $<span id="cash">120</span></div></div>
+<div class="mission"><b>YOUR DAILY GOAL</b><span id="goal">Harvest 3 crops</span><br><span id="prog">0 / 3</span></div>
+<div class="bottom"><div class="hint" id="hint">Move with the joystick. Go to crops and tap ACTION.</div><div class="stick" id="stick"><div class="knob" id="knob"></div></div><div class="actions"><button class="btn" id="action">🌾 ACTION</button><button class="btn green" id="upgrade">🏪 UPGRADE $80</button></div></div></div>
+<div class="overlay" id="start"><div class="card"><h1>🌱 MINI <span style="color:#ffdc69">MART</span></h1><p>Grow your little farm, harvest crops, stock the market, serve customers and grow your business!</p><p>🕹️ Move with joystick · 🌾 Harvest crops · 🛒 Stock the store · 💵 Serve customers</p><button class="btn green" id="play">▶ PLAY</button></div></div>
+<div class="toast" id="toast"></div>
+<script>
+(()=>{const canvas=document.querySelector('#c'),ctx=canvas.getContext('2d');let W,H,DPR;function resize(){DPR=Math.min(devicePixelRatio||1,2);W=innerWidth;H=innerHeight;canvas.width=W*DPR;canvas.height=H*DPR;canvas.style.width=W+'px';canvas.style.height=H+'px';ctx.setTransform(DPR,0,0,DPR,0,0)}addEventListener('resize',resize);resize();
+let player={x:0,z:0},move={x:0,y:0},cash=120,harvested=0,stock=0,sales=0,level=1,started=false,toastTimer;
+const crops=[];for(let z=0;z<3;z++)for(let x=0;x<4;x++)crops.push({x:-5.2+x*1.45,z:-5.2+z*1.5,ready:true});
+const customers=[{x:5,z:-1,phase:0},{x:4,z:1,phase:2},{x:6,z:0,phase:4}];
+function toast(t){const el=document.querySelector('#toast');el.textContent=t;el.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show'),1600)}
+function update(){document.querySelector('#cash').textContent=cash;document.querySelector('#prog').textContent=Math.min(harvested,3)+' / 3';document.querySelector('#goal').textContent=harvested<3?'Harvest 3 crops':stock<3?'Stock 3 shelves':'Serve 3 customers';document.querySelector('#upgrade').textContent='🏪 UPGRADE $'+(80*level);document.querySelector('#hint').textContent=player.z<-2?'Near the farm: ACTION to harvest crops.':player.x>2?'Near the market: ACTION to stock or serve.':'Walk to the farm or market and tap ACTION.'}
+function action(){if(!started)return;let nearest=null,dist=99;for(const c of crops){const d=Math.hypot(player.x-c.x,player.z-c.z);if(d<dist){dist=d;nearest=c}}if(dist<1.4){if(nearest.ready){nearest.ready=false;harvested++;stock++;cash+=2;toast('Harvested! +2');setTimeout(()=>{nearest.ready=true},4500);update();return}else{toast('This crop is growing!');return}}
+if(player.x>2&&player.z<3){if(stock>0){stock--;cash+=15;sales++;toast('Shelf stocked! Customer bought it +$15');update();return}else{toast('No produce! Harvest crops first.');return}}
+if(player.x>2){cash+=10;sales++;toast('Customer served! +$10');update();return}toast('Go closer to a crop or the market!')}
+document.querySelector('#action').onclick=action;document.querySelector('#upgrade').onclick=()=>{let price=80*level;if(cash<price){toast('Not enough money yet!');return}cash-=price;level++;crops.forEach(c=>c.ready=true);toast('Market upgraded! More crops unlocked.');update()};
+document.querySelector('#play').onclick=()=>{started=true;document.querySelector('#start').classList.add('hidden');toast('Welcome, shop owner!')};
+const stick=document.querySelector('#stick'),knob=document.querySelector('#knob');let pid=null;function stickMove(e){const r=stick.getBoundingClientRect();let dx=e.clientX-(r.left+r.width/2),dy=e.clientY-(r.top+r.height/2),max=r.width*.31,len=Math.hypot(dx,dy);if(len>max){dx=dx/len*max;dy=dy/len*max}move.x=dx/max;move.y=dy/max;knob.style.transform=`translate(${dx}px,${dy}px)`}function reset(){pid=null;move.x=move.y=0;knob.style.transform='translate(0,0)'}stick.addEventListener('pointerdown',e=>{pid=e.pointerId;stick.setPointerCapture(pid);stickMove(e)});stick.addEventListener('pointermove',e=>{if(e.pointerId===pid)stickMove(e)});stick.addEventListener('pointerup',reset);stick.addEventListener('pointercancel',reset);
+addEventListener('keydown',e=>{if(e.key==='ArrowLeft'||e.key==='a')move.x=-1;if(e.key==='ArrowRight'||e.key==='d')move.x=1;if(e.key==='ArrowUp'||e.key==='w')move.y=-1;if(e.key==='ArrowDown'||e.key==='s')move.y=1;if(e.key===' ')action()});addEventListener('keyup',e=>{if(['ArrowLeft','ArrowRight','a','d'].includes(e.key))move.x=0;if(['ArrowUp','ArrowDown','w','s'].includes(e.key))move.y=0});
+function rounded(x,y,w,h,r,color){ctx.fillStyle=color;ctx.beginPath();ctx.roundRect(x,y,w,h,r);ctx.fill()}
+function draw(){ctx.clearRect(0,0,W,H);ctx.fillStyle='#bce7ff';ctx.fillRect(0,0,W,H);const scale=Math.min(W/14,H/10),cx=W/2-player.x*scale,cy=H*.48+player.z*scale*.4;
+function world(x,z){return [cx+x*scale,cy+z*scale*.78]}
+ // grass and paved market zones
+ctx.fillStyle='#79cf77';ctx.beginPath();ctx.moveTo(...world(-7,-7));ctx.lineTo(...world(7,-7));ctx.lineTo(...world(7,7));ctx.lineTo(...world(-7,7));ctx.closePath();ctx.fill();
+function rectWorld(x,z,w,d,color){const p=world(x,z),ww=w*scale,hh=d*scale*.78;ctx.fillStyle=color;ctx.beginPath();ctx.moveTo(p[0]-ww/2,p[1]-hh/2);ctx.lineTo(p[0]+ww/2,p[1]-hh/2);ctx.lineTo(p[0]+ww/2,p[1]+hh/2);ctx.lineTo(p[0]-ww/2,p[1]+hh/2);ctx.closePath();ctx.fill()}
+rectWorld(-3.1,-3.4,6.5,5.8,'#9c7049');rectWorld(4.3,-.2,5.4,6.5,'#e8d9b4');rectWorld(0,4.8,12,2,'#d7c49c');
+ctx.font=`bold ${Math.max(10,scale*.34)}px system-ui`;ctx.textAlign='center';
+crops.forEach(c=>{const p=world(c.x,c.z);ctx.fillStyle='#70472e';ctx.beginPath();ctx.ellipse(p[0],p[1]+scale*.1,scale*.34,scale*.18,0,0,Math.PI*2);ctx.fill();if(c.ready){ctx.strokeStyle='#25854c';ctx.lineWidth=Math.max(2,scale*.07);ctx.beginPath();ctx.moveTo(p[0],p[1]);ctx.lineTo(p[0],p[1]-scale*.42);ctx.stroke();ctx.fillStyle='#ffbd37';for(let k=0;k<3;k++){ctx.beginPath();ctx.arc(p[0]+(k-1)*scale*.13,p[1]-scale*.4-Math.abs(k-1)*scale*.06,scale*.12,0,Math.PI*2);ctx.fill()}}else{ctx.fillStyle='#328a4e';ctx.beginPath();ctx.arc(p[0],p[1]-scale*.1,scale*.1,0,Math.PI*2);ctx.fill()}});
+ // shop roof and counters
+rectWorld(4.3,-2.1,5.3,.55,'#368bc4');rectWorld(4.3,.2,4.6,.5,'#ae7547');rectWorld(4.3,1.8,4.6,.5,'#ae7547');
+for(let i=0;i<4;i++){const p=world(2.6+i*1.1,-2.1);ctx.fillStyle=['#ffcd43','#f05b5b','#62c8ed','#73d887'][i];ctx.fillRect(p[0]-scale*.16,p[1]-scale*.15,scale*.3,scale*.27)}
+const p=world(4.3,3.0);ctx.fillStyle='#1c7650';ctx.fillRect(p[0]-scale*1.3,p[1]-scale*.24,scale*2.6,scale*.48);ctx.fillStyle='#fff';ctx.fillText('CHECKOUT',p[0],p[1]+scale*.1);
+ // customers
+customers.forEach((c,i)=>{c.phase+=.01;const p=world(c.x+Math.sin(c.phase)*.25,c.z+Math.cos(c.phase)*.2);ctx.fillStyle=['#f18cae','#9d85ed','#ffab55'][i];ctx.beginPath();ctx.ellipse(p[0],p[1]-scale*.28,scale*.19,scale*.25,0,0,Math.PI*2);ctx.fill();ctx.fillStyle='#f2c29a';ctx.beginPath();ctx.arc(p[0],p[1]-scale*.56,scale*.15,0,Math.PI*2);ctx.fill()});
+ // player
+const pp=world(player.x,player.z);ctx.fillStyle='#0002';ctx.beginPath();ctx.ellipse(pp[0],pp[1]+scale*.12,scale*.3,scale*.15,0,0,Math.PI*2);ctx.fill();ctx.fillStyle='#287fc4';ctx.fillRect(pp[0]-scale*.19,pp[1]-scale*.48,scale*.38,scale*.55);ctx.fillStyle='#f1bf93';ctx.beginPath();ctx.arc(pp[0],pp[1]-scale*.63,scale*.19,0,Math.PI*2);ctx.fill();ctx.fillStyle='#503727';ctx.beginPath();ctx.arc(pp[0],pp[1]-scale*.7,scale*.19,Math.PI,Math.PI*2);ctx.fill();
+ctx.fillStyle='#22563d';ctx.font=`bold ${Math.max(12,scale*.34)}px system-ui`;ctx.fillText('🌱 FARM',world(-3.2,-6.3)[0],world(-3.2,-6.3)[1]);ctx.fillText('🛒 MINI MART',world(4.3,-3.5)[0],world(4.3,-3.5)[1]);
+if(started){let dx=move.x,dz=move.y,len=Math.hypot(dx,dz);if(len>1){dx/=len;dz/=len}player.x=Math.max(-6,Math.min(6,player.x+dx*.075));player.z=Math.max(-6,Math.min(6,player.z+dz*.075));}
+requestAnimationFrame(draw)}
+draw();update();
+})();
+</script></body></html>
